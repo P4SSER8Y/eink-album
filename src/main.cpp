@@ -22,7 +22,7 @@ inline void load_default_image()
 {
     for (auto i = 0; i < IMG_SIZE; i++)
     {
-        epd.set_pixel(i, (EPD_7IN3E::color_index_t)DEFAULT_IMG[i]);
+        epd.set_pixel(i, DEFAULT_IMG[i]);
     }
 }
 
@@ -89,7 +89,7 @@ void loop()
         if (delta > 3000)
         {
             LOG("Long press");
-            epd.clear(epd.WHITE);
+            epd.clear(WHITE);
         }
         else if (delta > 250)
         {

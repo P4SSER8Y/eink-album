@@ -6,8 +6,7 @@
 #include <vector>
 
 static const uint8_t COLOR_VALUE[] = {
-    [EPD_7IN3E::BLACK] = 0x00, [EPD_7IN3E::WHITE] = 0x01, [EPD_7IN3E::YELLOW] = 0x02,
-    [EPD_7IN3E::RED] = 0x03,   [EPD_7IN3E::BLUE] = 0x05,  [EPD_7IN3E::GREEN] = 0x06,
+    [BLACK] = 0x00, [WHITE] = 0x01, [YELLOW] = 0x02, [RED] = 0x03, [BLUE] = 0x05, [GREEN] = 0x06,
 };
 
 EPD_7IN3E::EPD_7IN3E(uint8_t sck, uint8_t mosi, uint8_t cs, uint8_t dc, uint8_t rst, uint8_t busy, uint8_t pwr,
@@ -203,12 +202,12 @@ void EPD_7IN3E::end_write_buffer()
     turn_on_display();
 }
 
-void EPD_7IN3E::set_pixel(size_t x, size_t y, color_index_t color_index)
+void EPD_7IN3E::set_pixel(size_t x, size_t y, uint8_t color_index)
 {
     set_pixel(y * WIDTH + x, color_index);
 }
 
-void EPD_7IN3E::set_pixel(size_t idx, color_index_t color_index)
+void EPD_7IN3E::set_pixel(size_t idx, uint8_t color_index)
 {
     auto color = this->get_color_value(color_index);
     if (idx % 2 == 0)
