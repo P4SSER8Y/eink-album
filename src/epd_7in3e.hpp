@@ -18,13 +18,17 @@ enum color_index_t : uint8_t
 class EPD_7IN3E : public canvas_interface
 {
   public:
-    EPD_7IN3E(uint8_t sck, uint8_t mosi, uint8_t cs, uint8_t dc, uint8_t rst, uint8_t busy, uint8_t pwr, uint8_t led);
+    EPD_7IN3E();
     EPD_7IN3E(const EPD_7IN3E &) = delete;
     ~EPD_7IN3E() = default;
+    
+    void begin(uint8_t sck, uint8_t mosi, uint8_t cs, uint8_t dc, uint8_t rst, uint8_t busy, uint8_t pwr, uint8_t led);
 
     static const size_t WIDTH = 800;
     static const size_t HEIGHT = 480;
-    uint8_t buffer[WIDTH * HEIGHT / 2];
+    static const size_t BUFFER_SIZE = WIDTH * HEIGHT / 2;
+    
+    uint8_t buffer[BUFFER_SIZE] = {0};
 
     void set_pixel(size_t x, size_t y, uint8_t color_index) override;
     void set_pixel(size_t idx, uint8_t color_index);

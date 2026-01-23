@@ -1,6 +1,10 @@
 {
     "files.associations": {
         "cstdint": "cpp",
-        "cstddef": "cpp"
-    }
+        "cstddef": "cpp",
+        "vector": "cpp",
+        "map": "cpp",
+        "utility": "cpp"
+    },
+    "idf.pythonInstallPath": "/Users/troy/.local/anaconda3/bin/python"
 }

@@ -9,10 +9,22 @@ static const uint8_t COLOR_VALUE[] = {
     [BLACK] = 0x00, [WHITE] = 0x01, [YELLOW] = 0x02, [RED] = 0x03, [BLUE] = 0x05, [GREEN] = 0x06,
 };
 
-EPD_7IN3E::EPD_7IN3E(uint8_t sck, uint8_t mosi, uint8_t cs, uint8_t dc, uint8_t rst, uint8_t busy, uint8_t pwr,
-                     uint8_t led)
-    : pin_sck(sck), pin_mosi(mosi), pin_cs(cs), pin_dc(dc), pin_rst(rst), pin_busy(busy), pin_pwr(pwr), pin_led(led)
+EPD_7IN3E::EPD_7IN3E()
 {
+}
+
+void EPD_7IN3E::begin(uint8_t sck, uint8_t mosi, uint8_t cs, uint8_t dc, uint8_t rst, uint8_t busy, uint8_t pwr,
+                      uint8_t led)
+{
+    pin_sck = sck;
+    pin_mosi = mosi;
+    pin_cs = cs;
+    pin_dc = dc;
+    pin_rst = rst;
+    pin_busy = busy;
+    pin_pwr = pwr;
+    pin_led = led;
+
     pinMode(pin_busy, INPUT);
     pinMode(pin_rst, OUTPUT);
     pinMode(pin_dc, OUTPUT);
@@ -24,7 +36,7 @@ EPD_7IN3E::EPD_7IN3E(uint8_t sck, uint8_t mosi, uint8_t cs, uint8_t dc, uint8_t 
     digitalWrite(pin_cs, HIGH);
     digitalWrite(pin_led, LOW);
 
-    SPI.begin(pin_sck, -1, pin_mosi, -1);
+    SPI.begin(pin_sck, 5, pin_mosi, -1);
     SPI.beginTransaction(SPISettings(4000000, MSBFIRST, SPI_MODE0));
 }
 
@@ -158,6 +170,7 @@ void EPD_7IN3E::deep_sleep()
 void EPD_7IN3E::power_down()
 {
     LOG("EPD_7IN3::power_down()");
+    digitalWrite(pin_rst, LOW);
     digitalWrite(pin_pwr, LOW);
 }
 
@@ -209,14 +222,16 @@ void EPD_7IN3E::set_pixel(size_t x, size_t y, uint8_t color_index)
 
 void EPD_7IN3E::set_pixel(size_t idx, uint8_t color_index)
 {
+    if (idx >= WIDTH * HEIGHT)
+        return;
     auto color = this->get_color_value(color_index);
     if (idx % 2 == 0)
     {
-        this->buffer[idx / 2] = (this->buffer[idx / 2] & 0x0F) | (color << 4);
+        buffer[idx / 2] = (buffer[idx / 2] & 0x0F) | (color << 4);
     }
     else
     {
-        this->buffer[idx / 2] = (this->buffer[idx / 2] & 0xF0) | color;
+        buffer[idx / 2] = (buffer[idx / 2] & 0xF0) | color;
     }
 }
 
@@ -226,9 +241,9 @@ void EPD_7IN3E::flush_buffer()
 
     LOG("EPD_7IN3E::flush_buffer()");
     begin_write_buffer();
-    for (auto v : this->buffer)
+    for (auto i = 0; i < BUFFER_SIZE; i++)
     {
-        write_buffer(v);
+        write_buffer(buffer[i]);
     }
     end_write_buffer();
 
