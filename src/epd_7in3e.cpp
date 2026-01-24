@@ -13,8 +13,7 @@ EPD_7IN3E::EPD_7IN3E()
 {
 }
 
-void EPD_7IN3E::begin(uint8_t sck, uint8_t mosi, uint8_t cs, uint8_t dc, uint8_t rst, uint8_t busy, uint8_t pwr,
-                      uint8_t led)
+void EPD_7IN3E::begin(uint8_t sck, uint8_t mosi, uint8_t cs, uint8_t dc, uint8_t rst, uint8_t busy, uint8_t pwr, uint8_t dummy)
 {
     pin_sck = sck;
     pin_mosi = mosi;
@@ -23,7 +22,7 @@ void EPD_7IN3E::begin(uint8_t sck, uint8_t mosi, uint8_t cs, uint8_t dc, uint8_t
     pin_rst = rst;
     pin_busy = busy;
     pin_pwr = pwr;
-    pin_led = led;
+    pin_dummy = dummy;
 
     pinMode(pin_busy, INPUT);
     pinMode(pin_rst, OUTPUT);
@@ -32,12 +31,10 @@ void EPD_7IN3E::begin(uint8_t sck, uint8_t mosi, uint8_t cs, uint8_t dc, uint8_t
     pinMode(pin_cs, OUTPUT);
     pinMode(pin_mosi, OUTPUT);
     pinMode(pin_sck, OUTPUT);
-    pinMode(pin_led, OUTPUT);
     digitalWrite(pin_cs, HIGH);
-    digitalWrite(pin_led, LOW);
 
-    SPI.begin(pin_sck, 5, pin_mosi, -1);
-    SPI.beginTransaction(SPISettings(4000000, MSBFIRST, SPI_MODE0));
+    SPI.begin(pin_sck, pin_dummy, pin_mosi, -1);
+    SPI.beginTransaction(SPISettings(1000000, MSBFIRST, SPI_MODE0));
 }
 
 void EPD_7IN3E::send_command(uint8_t data)
@@ -122,12 +119,10 @@ bool EPD_7IN3E::is_busy()
 void EPD_7IN3E::wait_busy()
 {
     LOG("Waiting for BUSY...");
-    digitalWrite(pin_led, LOW);
     while (is_busy())
     {
         delay(1);
     }
-    digitalWrite(pin_led, HIGH);
     LOG("done");
 }
 

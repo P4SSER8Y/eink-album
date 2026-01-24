@@ -7,41 +7,45 @@
 #include <WiFi.h>
 #include <cstdint>
 #include <nvs_flash.h>
+#include <FastLED.h>
 
-const uint8_t PIN_SCK = 4;
-const uint8_t PIN_MOSI = 6;
-const uint8_t PIN_CS = 7;
-const uint8_t PIN_DC = 2;
-const uint8_t PIN_RST = 1;
-const uint8_t PIN_BUSY = 0;
+const uint8_t PIN_SCK = 5;
+const uint8_t PIN_MOSI = 4;
+const uint8_t PIN_CS = 6;
+const uint8_t PIN_DC = 7;
+const uint8_t PIN_RST = 15;
+const uint8_t PIN_BUSY = 16;
 const uint8_t PIN_PWR = 3;
-const uint8_t PIN_LED = 8;
-const uint8_t PIN_BOOT = 9;
+const uint8_t PIN_LED = 9;
+const uint8_t PIN_DUMMY = 12;
+const uint8_t PIN_BOOT = 0;
 const auto GPIO_NUM_BOOT = GPIO_NUM_9;
 
 EPD_7IN3E epd;
 
-bool fetch_image(size_t since, size_t size)
+CRGB leds[1];
+
+bool fetch_image()
 {
     int len;
     int total_len;
     int idx;
     char url[256];
-    snprintf(url, sizeof(url), KEY_URL, since, size);
+    snprintf(url, sizeof(url), KEY_URL);
     LOG("Start fetch an image from %s", url);
     HTTPClient client;
-    client.setTimeout(30000);
+    client.setTimeout(60000);
     client.setConnectTimeout(5000);
     client.begin(url);
     auto code = client.GET();
     len = client.getSize();
-    // LOG("Get HTTP code: %d size: %d", code, len);
+    idx = 0;
+    LOG("Get HTTP code: %d size: %d", code, len);
     if (code == HTTP_CODE_OK)
     {
-        uint8_t buffer[512];
+        uint8_t buffer[128];
         auto stream = client.getStreamPtr();
         total_len = len;
-        idx = since;
         auto ts = millis();
         // LOG("Start read %d bytes", len);
         while (client.connected() && (len > 0 || len == -1) && (millis() - ts < 60e3))
@@ -49,7 +53,7 @@ bool fetch_image(size_t since, size_t size)
             size_t size = stream->available();
             if (size)
             {
-                auto c = stream->readBytes(buffer, ((size > sizeof(buffer)) ? sizeof(buffer) : size));
+                auto c = stream->readBytes(buffer, sizeof(buffer));
                 if (len > 0)
                 {
                     len -= c;
@@ -61,10 +65,10 @@ bool fetch_image(size_t since, size_t size)
             }
             delay(1);
         }
-        // LOG("End read, total %d bytes", idx);
+        LOG("End read, total %d bytes", idx);
     }
     client.end();
-    return (idx > 0) && (idx == since + size);
+    return (idx == total_len);
 }
 
 void start_wifi(void)
@@ -110,13 +114,39 @@ void go_to_bed()
 void setup()
 {
     Serial.begin(115200);
+    FastLED.addLeds<NEOPIXEL, 48>(leds, 1);
+    FastLED.setBrightness(5);
+
+    leds[0] = CRGB::Red;
+    FastLED.show();
     LOG("Hello World");
+    
+    start_wifi();
+    leds[0] = CRGB::Blue;
+    FastLED.show();
+
     pinMode(PIN_BOOT, INPUT);
-    pinMode(PIN_LED, OUTPUT);
-    epd.begin(PIN_SCK, PIN_MOSI, PIN_CS, PIN_DC, PIN_RST, PIN_BUSY, PIN_PWR, PIN_LED);
+
+    epd.begin(PIN_SCK, PIN_MOSI, PIN_CS, PIN_DC, PIN_RST, PIN_BUSY, PIN_PWR, PIN_DUMMY);
     digitalWrite(PIN_LED, HIGH);
-    epd.write_debug_bars();
-    // epd.clear(WHITE);
+    start_wifi();
+    auto flag = fetch_image();
+    stop_wifi();
+    leds[0] = CRGB::Yellow;
+    FastLED.show();
+    if (flag)
+    {
+        epd.flush_buffer();
+        // epd.clear(BLUE);
+    }
+    leds[0] = CRGB::Green;
+    FastLED.show();
+    
+    delay(60000);
+    // epd.write_debug_bars();
+    epd.clear(WHITE);
+    leds[0] = CRGB::Black;
+    FastLED.show();
 }
 
 inline bool pressed()
@@ -126,10 +156,13 @@ inline bool pressed()
 
 void loop()
 {
+    delay(1000);
+    return;
     // go_to_bed();
     if (pressed())
     {
-        digitalWrite(PIN_LED, LOW);
+        leds[0] = CRGB::VioletRed;
+        FastLED.show();
         LOG("Pressed");
         auto ts = millis();
         auto last = millis();
@@ -167,12 +200,7 @@ void loop()
         {
             LOG("Short press");
             start_wifi();
-            const auto size = 1024;
-            auto flag = true;
-            for (auto i = 0; i < epd.WIDTH * epd.HEIGHT; i += size)
-            {
-                flag &= fetch_image(i, size);
-            }
+            auto flag = fetch_image();
             stop_wifi();
             if (flag)
             {
@@ -180,5 +208,6 @@ void loop()
                 // epd.clear(BLUE);
             }
         }
+        FastLED.clear();
     }
 }

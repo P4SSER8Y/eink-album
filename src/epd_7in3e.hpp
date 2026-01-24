@@ -22,7 +22,7 @@ class EPD_7IN3E : public canvas_interface
     EPD_7IN3E(const EPD_7IN3E &) = delete;
     ~EPD_7IN3E() = default;
     
-    void begin(uint8_t sck, uint8_t mosi, uint8_t cs, uint8_t dc, uint8_t rst, uint8_t busy, uint8_t pwr, uint8_t led);
+    void begin(uint8_t sck, uint8_t mosi, uint8_t cs, uint8_t dc, uint8_t rst, uint8_t busy, uint8_t pwr, uint8_t dummy);
 
     static const size_t WIDTH = 800;
     static const size_t HEIGHT = 480;
@@ -45,7 +45,7 @@ class EPD_7IN3E : public canvas_interface
     uint8_t pin_rst;
     uint8_t pin_busy;
     uint8_t pin_pwr;
-    uint8_t pin_led;
+    uint8_t pin_dummy;
     uint32_t write_cnt;
 
     using table_t = std::vector<std::pair<uint8_t, std::vector<uint8_t>>>;
