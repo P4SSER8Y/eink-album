@@ -6,7 +6,8 @@
 #include <vector>
 
 static const uint8_t COLOR_VALUE[] = {
-    [BLACK] = 0x00, [WHITE] = 0x01, [YELLOW] = 0x02, [RED] = 0x03, [BLUE] = 0x05, [GREEN] = 0x06,
+    [BLACK] = 0x00, [WHITE] = 0x01, [YELLOW] = 0x02, [RED] = 0x03,
+    [ORANGE] = 0x04, [BLUE] = 0x05, [GREEN] = 0x06,
 };
 
 EPD_7IN3E::EPD_7IN3E()

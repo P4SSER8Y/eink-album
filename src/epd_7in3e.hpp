@@ -10,8 +10,9 @@ enum color_index_t : uint8_t
     WHITE = 1,
     YELLOW = 2,
     RED = 3,
-    BLUE = 4,
-    GREEN = 5,
+    ORANGE = 4,
+    BLUE = 5,
+    GREEN = 6,
     COLOR_NUM,
 };
 

@@ -1,213 +1,134 @@
 #include "../key.hpp"
+#include "config.hpp"
 #include "epd_7in3e.hpp"
-#include "img.hpp"
+#include "hardware_define.h"
+#include "http_server.hpp"
+#include "indicator.hpp"
 #include "log.hpp"
+#include "mqtt_ha.hpp"
 #include <Arduino.h>
-#include <HTTPClient.h>
 #include <WiFi.h>
-#include <cstdint>
 #include <nvs_flash.h>
-#include <FastLED.h>
 
-const uint8_t PIN_SCK = 5;
-const uint8_t PIN_MOSI = 4;
-const uint8_t PIN_CS = 6;
-const uint8_t PIN_DC = 7;
-const uint8_t PIN_RST = 15;
-const uint8_t PIN_BUSY = 16;
-const uint8_t PIN_PWR = 3;
-const uint8_t PIN_LED = 9;
-const uint8_t PIN_DUMMY = 12;
-const uint8_t PIN_BOOT = 0;
-const auto GPIO_NUM_BOOT = GPIO_NUM_9;
-
+static Config cfg;
 EPD_7IN3E epd;
 
-CRGB leds[1];
-
-bool fetch_image()
+static void connect_wifi()
 {
-    int len;
-    int total_len;
-    int idx;
-    char url[256];
-    snprintf(url, sizeof(url), KEY_URL);
-    LOG("Start fetch an image from %s", url);
-    HTTPClient client;
-    client.setTimeout(60000);
-    client.setConnectTimeout(5000);
-    client.begin(url);
-    auto code = client.GET();
-    len = client.getSize();
-    idx = 0;
-    LOG("Get HTTP code: %d size: %d", code, len);
-    if (code == HTTP_CODE_OK)
-    {
-        uint8_t buffer[128];
-        auto stream = client.getStreamPtr();
-        total_len = len;
-        auto ts = millis();
-        // LOG("Start read %d bytes", len);
-        while (client.connected() && (len > 0 || len == -1) && (millis() - ts < 60e3))
-        {
-            size_t size = stream->available();
-            if (size)
-            {
-                auto c = stream->readBytes(buffer, sizeof(buffer));
-                if (len > 0)
-                {
-                    len -= c;
-                }
-                for (auto i = 0; i < c; i++)
-                {
-                    epd.set_pixel(idx++, buffer[i]);
-                }
-            }
-            delay(1);
-        }
-        LOG("End read, total %d bytes", idx);
-    }
-    client.end();
-    return (idx == total_len);
-}
-
-void start_wifi(void)
-{
-    // Initialize NVS
-    esp_err_t ret = nvs_flash_init();
-    if (ret == ESP_ERR_NVS_NO_FREE_PAGES || ret == ESP_ERR_NVS_NEW_VERSION_FOUND)
-    {
-        ESP_ERROR_CHECK(nvs_flash_erase());
-        ret = nvs_flash_init();
-    }
-    ESP_ERROR_CHECK(ret);
-
+    nvs_flash_init();
     WiFi.mode(WIFI_STA);
-    WiFi.begin(KEY_WIFI_SSID, KEY_WIFI_PASSWORD);
+    WiFi.begin(cfg.wifi_ssid, cfg.wifi_password);
 
-    while (WiFi.status() != WL_CONNECTED)
-    {
+    Indicator->set_state(IIndicator::WIFI_Connecting);
+    while (WiFi.status() != WL_CONNECTED) {
         delay(500);
-        LOG("Waiting..");
+        LOG("Waiting for WiFi...");
     }
-    LOG("Connected to %s", KEY_WIFI_SSID);
-    LOG("IP address: %s", WiFi.localIP().toString().c_str());
-}
-
-void stop_wifi()
-{
-    LOG("Disconnect");
-    WiFi.disconnect(true);
-}
-
-void go_to_bed()
-{
-    digitalWrite(PIN_LED, HIGH);
-    gpio_wakeup_enable(GPIO_NUM_BOOT, GPIO_INTR_LOW_LEVEL);
-    esp_sleep_enable_gpio_wakeup();
-    esp_sleep_enable_timer_wakeup(1e6);
-    esp_light_sleep_start();
-    pinMode(PIN_LED, OUTPUT);
-    digitalWrite(PIN_LED, HIGH);
+    LOG("WiFi connected, IP: %s", WiFi.localIP().toString().c_str());
+    Indicator->set_state(IIndicator::WIFI_Connected);
 }
 
 void setup()
 {
     Serial.begin(115200);
-    FastLED.addLeds<NEOPIXEL, 48>(leds, 1);
-    FastLED.setBrightness(5);
-
-    leds[0] = CRGB::Red;
-    FastLED.show();
-    LOG("Hello World");
-    
-    start_wifi();
-    leds[0] = CRGB::Blue;
-    FastLED.show();
-
-    pinMode(PIN_BOOT, INPUT);
+    Serial.flush();
+    Serial.println("\n=== E-Ink Album Starting ===");
+    delay(3000);
+    init_indicator();
+    LOG("Indicator initialized");
+    Indicator->set_state(IIndicator::Busy);
 
     epd.begin(PIN_SCK, PIN_MOSI, PIN_CS, PIN_DC, PIN_RST, PIN_BUSY, PIN_PWR, PIN_DUMMY);
-    digitalWrite(PIN_LED, HIGH);
-    start_wifi();
-    auto flag = fetch_image();
-    stop_wifi();
-    leds[0] = CRGB::Yellow;
-    FastLED.show();
-    if (flag)
-    {
-        epd.flush_buffer();
-        // epd.clear(BLUE);
-    }
-    leds[0] = CRGB::Green;
-    FastLED.show();
-    
-    delay(60000);
-    // epd.write_debug_bars();
-    epd.clear(WHITE);
-    leds[0] = CRGB::Black;
-    FastLED.show();
+
+    // color_index_t colors[] = {BLACK, WHITE, YELLOW, RED, BLUE, GREEN};
+    // auto rcolor = colors[esp_random() % 6];
+    // LOG("Random fill with color %d", rcolor);
+    // epd.clear(rcolor);
+
+    cfg = Config::load();
+
+    connect_wifi();
+
+    http_server_begin(cfg);
+    mqtt.begin(cfg);
+
+    mqtt.publish_ip(WiFi.localIP().toString().c_str());
+
+    Indicator->set_state(IIndicator::Idle);
+    mqtt.publish_status(MqttHA::Restarted);
+    mqtt.publish_status(MqttHA::Idle);
+
+    LOG("Setup complete, free heap=%d psram=%d", ESP.getFreeHeap(), ESP.getFreePsram());
 }
 
-inline bool pressed()
+static void ensure_wifi()
 {
-    return digitalRead(PIN_BOOT) == LOW;
+    if (WiFi.status() == WL_CONNECTED)
+        return;
+
+    LOG("WiFi disconnected, reconnecting...");
+    Indicator->set_state(IIndicator::WIFI_Connecting);
+    WiFi.disconnect();
+    WiFi.mode(WIFI_STA);
+    WiFi.begin(cfg.wifi_ssid, cfg.wifi_password);
+
+    int retries = 0;
+    while (WiFi.status() != WL_CONNECTED && retries < 50) {
+        delay(500);
+        retries++;
+    }
+
+    if (WiFi.status() == WL_CONNECTED) {
+        LOG("WiFi reconnected, IP: %s", WiFi.localIP().toString().c_str());
+        Indicator->set_state(IIndicator::WIFI_Connected);
+    } else {
+        LOG("WiFi reconnect failed after %d retries", retries);
+        Indicator->set_state(IIndicator::WIFI_Connecting);
+    }
 }
 
 void loop()
 {
-    delay(1000);
-    return;
-    // go_to_bed();
-    if (pressed())
-    {
-        leds[0] = CRGB::VioletRed;
-        FastLED.show();
-        LOG("Pressed");
-        auto ts = millis();
-        auto last = millis();
-        delay(100);
-        do
-        {
-            delay(50);
-            auto now = millis();
-            auto delta = now - ts;
-            if (pressed())
-            {
-                digitalWrite(PIN_LED, (delta % 1000 < 100) ? LOW : HIGH);
-            }
-            else
-            {
-                digitalWrite(PIN_LED, (delta % 100 < 50) ? LOW : HIGH);
-            }
-            if (pressed())
-            {
-                last = now;
-            }
-            else if (now - last > 1000)
-            {
-                break;
-            }
-        } while (true);
-        auto delta = last - ts;
-        LOG("pressed for %dms", delta);
-        if (delta > 3000)
-        {
-            LOG("Long press");
-            epd.clear(WHITE);
-        }
-        else if (delta > 250)
-        {
-            LOG("Short press");
-            start_wifi();
-            auto flag = fetch_image();
-            stop_wifi();
-            if (flag)
-            {
-                epd.flush_buffer();
-                // epd.clear(BLUE);
-            }
-        }
-        FastLED.clear();
+    static unsigned long last_wifi_check = 0;
+    static unsigned long last_mqtt_attempt = 0;
+    static unsigned long last_status_log = 0;
+
+    server.handleClient();
+
+    if (millis() - last_wifi_check > 10000) {
+        last_wifi_check = millis();
+        ensure_wifi();
     }
+
+    if (mqtt.is_connected()) {
+        mqtt.loop();
+    }
+
+    if (millis() - last_status_log > 10000) {
+        last_status_log = millis();
+        LOG("MQTT status: connected=%d, broker=%s", mqtt.is_connected(), cfg.mqtt_broker);
+    }
+
+    if (mqtt_needs_reconnect || (!mqtt.is_connected() && millis() - last_mqtt_attempt > 30000)) {
+        mqtt_needs_reconnect = false;
+        last_mqtt_attempt = millis();
+        LOG("Attempting MQTT connect to %s:%d", cfg.mqtt_broker, cfg.mqtt_port);
+        mqtt.begin(cfg);
+        if (mqtt.is_connected())
+            mqtt.publish_status(MqttHA::Idle);
+    }
+
+    if (image_uploaded) {
+        image_uploaded = false;
+
+        Indicator->set_state(IIndicator::Updating);
+        mqtt.publish_status(MqttHA::Updating);
+        epd.flush_buffer();
+        mqtt.publish_status(MqttHA::Done);
+
+        Indicator->set_state(IIndicator::Idle);
+        mqtt.publish_status(MqttHA::Idle);
+    }
+
+    delay(10);
 }
