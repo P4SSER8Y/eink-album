@@ -31,6 +31,7 @@ void MqttHA::begin(const Config &cfg)
     snprintf(topic_refresh, sizeof(topic_refresh), "homeassistant/sensor/%s/refresh/set", device_id);
     snprintf(topic_ip_config, sizeof(topic_ip_config), "homeassistant/sensor/%s/ip/config", device_id);
     snprintf(topic_ip_state, sizeof(topic_ip_state), "homeassistant/sensor/%s/ip/state", device_id);
+    snprintf(topic_btn_random, sizeof(topic_btn_random), "homeassistant/button/%s/random/config", device_id);
 
     client.setClient(wifi_client);
     client.setServer(cfg.mqtt_broker, cfg.mqtt_port);
@@ -123,6 +124,22 @@ void MqttHA::publish_discovery()
         LOG("HA discovery: ip -> %s (%d bytes)", topic_ip_config, ip_payload.length());
     } else {
         LOG("HA discovery FAILED: ip (%d bytes)", ip_payload.length());
+    }
+
+    // Button: Random
+    JsonDocument btn_random;
+    btn_random["name"] = "Random";
+    btn_random["command_topic"] = "homeassistant/button/" + String(device_id) + "/random/command";
+    btn_random["unique_id"] = String(device_id) + "_btn_random";
+    btn_random["icon"] = "mdi:shuffle-variant";
+    btn_random["device"] = doc["device"];
+
+    String random_payload;
+    serializeJson(btn_random, random_payload);
+    if (client.publish(topic_btn_random, random_payload.c_str(), true)) {
+        LOG("HA discovery: btn random -> %s (%d bytes)", topic_btn_random, random_payload.length());
+    } else {
+        LOG("HA discovery FAILED: btn random (%d bytes)", random_payload.length());
     }
 }
 
