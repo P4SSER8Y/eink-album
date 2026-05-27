@@ -54,6 +54,10 @@ void setup()
 
     mqtt.publish_ip(WiFi.localIP().toString().c_str());
 
+    if (mqtt.is_connected()) {
+        mqtt.publish_random();
+    }
+
     Indicator->set_state(IIndicator::Idle);
     mqtt.publish_status(MqttHA::Restarted);
     mqtt.publish_status(MqttHA::Idle);

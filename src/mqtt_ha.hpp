@@ -12,6 +12,7 @@ public:
     void loop();
     void publish_status(Status st);
     void publish_ip(const char *ip);
+    void publish_random();
     bool is_connected() { return client.connected(); }
     bool refresh_requested() { bool v = _refresh_pending; _refresh_pending = false; return v; }
 
@@ -24,6 +25,7 @@ private:
     char topic_ip_config[128];
     char topic_ip_state[128];
     char topic_btn_random[128];
+    char topic_btn_random_cmd[128];
     char device_id[64];
     char device_name[64];
     bool _refresh_pending = false;

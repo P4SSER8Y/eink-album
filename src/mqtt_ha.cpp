@@ -32,6 +32,7 @@ void MqttHA::begin(const Config &cfg)
     snprintf(topic_ip_config, sizeof(topic_ip_config), "homeassistant/sensor/%s/ip/config", device_id);
     snprintf(topic_ip_state, sizeof(topic_ip_state), "homeassistant/sensor/%s/ip/state", device_id);
     snprintf(topic_btn_random, sizeof(topic_btn_random), "homeassistant/button/%s/random/config", device_id);
+    snprintf(topic_btn_random_cmd, sizeof(topic_btn_random_cmd), "homeassistant/button/%s/random/command", device_id);
 
     client.setClient(wifi_client);
     client.setServer(cfg.mqtt_broker, cfg.mqtt_port);
@@ -140,6 +141,14 @@ void MqttHA::publish_discovery()
         LOG("HA discovery: btn random -> %s (%d bytes)", topic_btn_random, random_payload.length());
     } else {
         LOG("HA discovery FAILED: btn random (%d bytes)", random_payload.length());
+    }
+}
+
+void MqttHA::publish_random()
+{
+    if (!client.connected()) return;
+    if (client.publish(topic_btn_random_cmd, "PRESS", true)) {
+        LOG("MQTT triggered: random button");
     }
 }
 
