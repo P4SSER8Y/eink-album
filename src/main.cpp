@@ -8,10 +8,17 @@
 #include "mqtt_ha.hpp"
 #include <Arduino.h>
 #include <WiFi.h>
+#include <freertos/FreeRTOS.h>
+#include <freertos/task.h>
 #include <nvs_flash.h>
 
 static Config cfg;
 EPD_7IN3E epd;
+static TaskHandle_t epd_task_handle = nullptr;
+volatile bool epd_busy = false;
+volatile bool epd_flush_done = false;
+
+static void epd_task_fn(void *);
 
 static void connect_wifi()
 {
@@ -58,6 +65,8 @@ void setup()
         mqtt.publish_random();
     }
 
+    xTaskCreatePinnedToCore(epd_task_fn, "epd", 4096, nullptr, 1, &epd_task_handle, 1);
+
     Indicator->set_state(IIndicator::Idle);
     mqtt.publish_status(MqttHA::Restarted);
     mqtt.publish_status(MqttHA::Idle);
@@ -88,6 +97,16 @@ static void ensure_wifi()
     } else {
         LOG("WiFi reconnect failed after %d retries", retries);
         Indicator->set_state(IIndicator::WIFI_Connecting);
+    }
+}
+
+static void epd_task_fn(void *)
+{
+    while (true) {
+        ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
+        epd.flush_buffer();
+        epd_flush_done = true;
+        epd_busy = false;
     }
 }
 
@@ -122,14 +141,19 @@ void loop()
             mqtt.publish_status(MqttHA::Idle);
     }
 
-    if (image_uploaded) {
+    if (image_uploaded && !epd_busy) {
         image_uploaded = false;
+        epd_busy = true;
+        epd_flush_done = false;
 
         Indicator->set_state(IIndicator::Updating);
         mqtt.publish_status(MqttHA::Updating);
-        epd.flush_buffer();
-        mqtt.publish_status(MqttHA::Done);
+        xTaskNotifyGive(epd_task_handle);
+    }
 
+    if (epd_flush_done) {
+        epd_flush_done = false;
+        mqtt.publish_status(MqttHA::Done);
         Indicator->set_state(IIndicator::Idle);
         mqtt.publish_status(MqttHA::Idle);
     }

@@ -11,6 +11,7 @@ WebServer server(80);
 bool image_uploaded = false;
 
 extern EPD_7IN3E epd;
+extern bool epd_busy;
 
 static Config *p_config = nullptr;
 
@@ -98,6 +99,11 @@ static void handle_config_post()
 
 static void handle_upload()
 {
+    if (epd_busy) {
+        server.send(503, "application/json", R"({"msg":"EPD refreshing, retry later"})");
+        return;
+    }
+
     if (!server.hasArg("plain")) {
         server.send(400, "application/json", R"({"msg":"no data"})");
         return;
