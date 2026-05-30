@@ -1,5 +1,6 @@
 #include "http_server.hpp"
 #include "epd_7in3e.hpp"
+#include "indicator.hpp"
 #include "log.hpp"
 #include "mqtt_ha.hpp"
 #include <Arduino.h>
@@ -135,6 +136,57 @@ static void handle_reboot()
     ESP.restart();
 }
 
+static void handle_indicator()
+{
+    if (!Indicator) {
+        server.send(503, "application/json", R"({"msg":"indicator not available"})");
+        return;
+    }
+
+    uint32_t timeout_s = 0;
+    float freq_hz = 0;
+    uint8_t r = 255, g = 255, b = 255;
+
+    if (server.hasArg("plain")) {
+        // POST: parse JSON body
+        JsonDocument doc;
+        auto err = deserializeJson(doc, server.arg("plain"));
+        if (err) {
+            server.send(400, "application/json", R"({"msg":"invalid json"})");
+            return;
+        }
+        timeout_s = doc["timeout"] | 0;
+        freq_hz = doc.containsKey("frequency") ? doc["frequency"].as<float>() : 0;
+
+        const char *color_str = doc["color"] | "0xFFFFFF";
+        uint32_t hex = strtoul(color_str, nullptr, 16);
+        r = (hex >> 16) & 0xFF;
+        g = (hex >> 8) & 0xFF;
+        b = hex & 0xFF;
+    } else {
+        // GET: parse query params
+        if (server.hasArg("timeout"))  timeout_s = server.arg("timeout").toInt();
+        if (server.hasArg("frequency")) freq_hz = server.arg("frequency").toFloat();
+        if (server.hasArg("color")) {
+            uint32_t hex = strtoul(server.arg("color").c_str(), nullptr, 16);
+            r = (hex >> 16) & 0xFF;
+            g = (hex >> 8) & 0xFF;
+            b = hex & 0xFF;
+        }
+    }
+
+    if (timeout_s == 0 && freq_hz == 0) {
+        Indicator->remote_effect_clear();
+        mqtt.publish_indicator_state(false, 0, 0, 0);
+        server.send(200, "application/json", R"({"msg":"off"})");
+        return;
+    }
+
+    Indicator->remote_effect(r, g, b, freq_hz, timeout_s);
+    mqtt.publish_indicator_state(true, r, g, b);
+    server.send(200, "application/json", R"({"msg":"ok"})");
+}
+
 static void handle_health()
 {
     JsonDocument doc;
@@ -154,6 +206,8 @@ void http_server_begin(const Config &cfg)
     server.on("/api/upload", HTTP_POST, handle_upload);
     server.on("/api/reboot", HTTP_POST, handle_reboot);
     server.on("/api/health", HTTP_GET, handle_health);
+    server.on("/api/indicator", HTTP_GET, handle_indicator);
+    server.on("/api/indicator", HTTP_POST, handle_indicator);
 
     server.begin();
     LOG("HTTP server started on port 80");

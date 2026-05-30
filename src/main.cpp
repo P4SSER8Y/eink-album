@@ -127,6 +127,19 @@ void loop()
         mqtt.loop();
     }
 
+    if (Indicator) Indicator->tick();
+
+    if (Indicator && mqtt.indicator_cmd_pending()) {
+        auto cmd = mqtt.consume_indicator_cmd();
+        if (cmd.clear || (cmd.timeout_s == 0 && cmd.freq_hz == 0)) {
+            Indicator->remote_effect_clear();
+            mqtt.publish_indicator_state(false, 0, 0, 0);
+        } else {
+            Indicator->remote_effect(cmd.r, cmd.g, cmd.b, cmd.freq_hz, cmd.timeout_s);
+            mqtt.publish_indicator_state(true, cmd.r, cmd.g, cmd.b);
+        }
+    }
+
     if (millis() - last_status_log > 10000) {
         last_status_log = millis();
         LOG("MQTT status: connected=%d, broker=%s", mqtt.is_connected(), cfg.mqtt_broker);
